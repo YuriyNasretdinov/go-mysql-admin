@@ -1,30 +1,66 @@
-function submitQuery() {
-	$.ajax('mysql', { type: 'POST', data: {query: $('#query').val()} }).done(function(data) {
-		var response = ["<div>Query time: " + Math.floor(data['time_ns'] / 1000000) + " ms</div>"];
-		var fields = data.fields;
-		response.push("<table><thead><tr>");
-		for (var i = 0; i < fields.length; i++) {
-			response.push("<th>" + fields[i] + "</th>");
-		}
-		response.push("</tr></thead><tbody>");
+function drawResponse(data) {
+  $('#query-ms').html(Math.floor(data['time_ns'] / 1000000))
+  $('#affected-rows').html(data['affected_rows'])
 
-		var rows = data.rows;
-		for (var i = 0; i < rows.length; i++) {
-			response.push("<tr>")
-			var row = rows[i]
-			for (var j = 0; j < row.length; j++) {
-				if (row[j] == null) {
-					response.push("<td><i>NULL</i></td>");
-				} else {
-					response.push("<td>" + htmlspecialchars(row[j]) + "</td>");
-				}
-			}
-			response.push("</tr>")
-		}
+  if (data.err) {
+    $('#result').html('<b>Error:</b> ' + data.err);
+    return;
+  }
 
-		response.push("</tbody></tr></table>")
-		$('#result').html(response.join("\n"));
-	});
+  if (!data.fields.length) {
+    $('#result').html('<i>Query executed successfully. Got empty resultset</i>');
+    return;
+  }
+
+  var response = [];
+  var fields = data.fields;
+  response.push("<table class='table table-striped table-bordered table-condensed'><thead><tr>");
+  for (var i = 0; i < fields.length; i++) {
+    response.push("<th>" + fields[i] + "</th>");
+  }
+  response.push("</tr></thead><tbody>");
+
+  var rows = data.rows;
+  for (var i = 0; i < rows.length; i++) {
+    response.push("<tr>")
+    var row = rows[i]
+    for (var j = 0; j < row.length; j++) {
+      if (row[j] == null) {
+        response.push("<td><i>NULL</i></td>");
+      } else {
+        response.push("<td>" + htmlspecialchars(row[j]) + "</td>");
+      }
+    }
+    response.push("</tr>")
+  }
+
+  response.push("</tbody></tr></table>")
+  $('#result').html(response.join("\n"));
+}
+
+function string_utf8_len(str) {
+  var len = 0, l = str.length;
+
+  for (var i = 0; i < l; i++) {
+    var c = str.charCodeAt(i);
+    if (c <= 0x0000007F) len++;
+    else if (c >= 0x00000080 && c <= 0x000007FF) len += 2;
+    else if (c >= 0x00000800 && c <= 0x0000FFFF) len += 3;
+    else len += 4;
+  }
+
+  return len;
+}
+
+function indent(str) {
+  str = '' + str
+  while (str.length < 8) str += ' '
+  return str
+}
+
+function send_cmd(val) {
+  $('#execute-btn').attr('disabled', true);
+  ws.send(indent(string_utf8_len(val + ''), 8) + val)
 }
 
 function htmlspecialchars (string, quote_style, charset, double_encode) {

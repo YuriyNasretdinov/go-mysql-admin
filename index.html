@@ -1,6 +1,7 @@
 <html>
 <head>
 	<title>Go MySQL admin</title>
+	<link href="css/bootstrap.min.css" rel="stylesheet" media="screen">
 	<script type="text/javascript" src="jquery.js"></script>
 	<script type="text/javascript" src="app.js"></script>
 	<style type="text/css">
@@ -9,23 +10,120 @@
 		height: 100px;
 	}
 
-	#result th, td {
+	th, td {
 		padding: 4px;
+		vertical-align: top;
+	}
+
+	.border {
 		border: 1px gray solid;
 	}
 
-	#result table {
-		border-collapse: collapse;
+	#result {
+		height: 100%;
+		width: 100%;
+		overflow: auto;
 	}
 
-	</style>
-</head>
-<body>
-	<div>Query:</div>
-	<div><textarea id="query"></textarea></div>
-	<div><button onclick="submitQuery()"><b>Execute</b></div>
+	#result td, #result th {
+		font-size: 0.8em;
+	}
 
-	<div id="result">
-	</div>
-</body>
+	.status {
+		background-color: #f5f5f5;
+	}
+	</style>
+	<script type="text/javascript">
+	function submitQuery() {
+		send_cmd($('#query').val());
+	}
+
+	var ws, result_callback;
+
+	function reloadDatabases() {
+		result_callback = function(data) {
+			if (data.err) {
+				alert(data.err);
+				return;
+			}
+
+			var lst = ['<option value="">Select database...</option>'];
+			for (var i = 0; i < data.rows.length; i++) {
+				var name = data.rows[i][0];
+				lst.push('<option value="' + htmlspecialchars(name) + '">' + htmlspecialchars(name) + '</option>');
+			}
+
+			$('#database').html(lst.join("\n"));
+		};
+
+		send_cmd("SHOW DATABASES")
+	}
+
+	function selectDatabase(val) {
+		$('#database').attr('disabled', true);
+		result_callback = function(data) {
+			if (data.err) {
+				alert(data.err);
+				return;
+			}
+
+			$('#database').attr('disabled', false);
+			$('#query').focus()
+		};
+		send_cmd("USE " + val);
+	}
+
+	$(function() {
+		ws = new WebSocket('ws://' + window.location.host + '/mysql', "mysql");
+
+		ws.onopen = reloadDatabases;
+		ws.onmessage = function(ev) {
+			$('#execute-btn').attr('disabled', false);
+			if (!result_callback) result_callback = drawResponse;
+			result_callback(JSON.parse(ev.data));
+			result_callback = null;
+		}
+		ws.onclose = function() {
+			console.log('Connection closed')
+		}
+
+		$('#query').keydown(function(ev) {
+			if ((ev.metaKey || ev.ctrlKey) && ev.keyCode == 82 /* Cmd + R */) {
+				submitQuery();
+				return false;
+			}
+		}).focus()
+
+		$res = $('#result');
+		$res.css({
+			width: $res.width() + 'px',
+			height: $res.height() + 'px',
+			top: $res.offset().top + 'px',
+			left: $res.offset().left + 'px'
+		})
+	})
+	</script>
+</head>
+<body><table width="100%" height="100%">
+	<tr height="130">
+		<td width="200" rowspan="3" class="border">
+			<select id="database" onchange="selectDatabase(this.value)"></select>
+		</td>
+		<td class="border">
+			<div><textarea id="query"></textarea></div>
+			<div><button id="execute-btn" class="btn btn-primary" onclick="submitQuery()"><b>Execute</b></div>			
+		</td>
+	</tr>
+	<tr>
+		<td class="border">
+			<div id="result">
+			</div>
+		</td>
+	</tr>
+	<tr height="50">
+		<td class="border status">
+			<div>Query execution time: <span id="query-ms">0</span> ms; Affected rows: <span id="affected-rows">0</span></div>
+		</td>
+	</tr>
+</table></body>
 </html>
