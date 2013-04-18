@@ -38,6 +38,62 @@ function drawResponse(data) {
   $('#result').html(response.join("\n"));
 }
 
+function query(str, callback) {
+  result_callback = callback;
+  send_cmd(str);
+}
+
+function absolutize($el) {
+  $el.css({
+    width: $el.width() + 'px',
+    height: $el.height() + 'px'
+  })
+}
+
+function drawTables(rows) {
+  var result = ['<table class="table table-condensed table-hover"><thead><tr><th>Tables</th></tr></thead><tbody>'];
+  for (var i = 0; i < rows.length; i++) {
+    var name = htmlspecialchars(rows[i][0]);
+    result.push('<tr class="table_name" data-name="' + name + '"><td><i class="icon-th"></i>' + name + '</td></tr>')
+  }
+  result.push('</tbody></table>');
+  $('#tables').html(result.join("\n")).find('.table_name').each(function() {
+    $(this).bind('click', function() {
+      var name = $(this).data('name');
+      var className = 'success';
+      $('#tables').find('.' + className).removeClass(className);
+      $(this).addClass(className);
+      query("SHOW TABLE STATUS LIKE '" + name + "'", function(data) {
+        if (data.err) {
+          alert(data.err);
+          return;
+        }
+
+        var fields = data.fields;
+        var row = data.rows[0];
+
+        var rowAssoc = {};
+        for (var i = 0; i < fields.length; i++) rowAssoc[fields[i]] = row[i];
+
+        $('#query').val('SELECT * FROM ' + name + ' LIMIT 1000').focus();
+
+        $('#info').html(
+          '<div><b>Engine:</b> ' + htmlspecialchars(rowAssoc['Engine']) + '</div>' +
+          '<div><b>Est. Rows:</b> ' + htmlspecialchars(rowAssoc['Rows']) + '</div>' +
+          '<div><b>Size:</b> ' + humanSize(parseInt(rowAssoc['Data_length']) + parseInt(rowAssoc['Index_length'])) + '</div>'
+        );
+      });
+    })
+  });
+}
+
+function humanSize(bytes) {
+  if (bytes < 1024) return bytes + ' bytes';
+  if (bytes < 1024*1024) return Math.floor(bytes / 1024) + ' Kb';
+  if (bytes < 1024*1024*1024) return Math.floor(bytes / 1024 / 1024) + ' Mb';
+  return Math.floor(bytes / 1024 / 1024 / 1024) + ' Gb';
+}
+
 function string_utf8_len(str) {
   var len = 0, l = str.length;
 

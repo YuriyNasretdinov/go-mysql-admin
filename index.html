@@ -19,14 +19,23 @@
 		border: 1px gray solid;
 	}
 
-	#result {
+	#result, #tables {
 		height: 100%;
 		width: 100%;
 		overflow: auto;
 	}
 
+	.table_name {
+		white-space: nowrap;
+		cursor: default;
+	}
+
 	#result td, #result th {
 		font-size: 0.8em;
+	}
+
+	#info {
+		padding-left: 10px;
 	}
 
 	.status {
@@ -35,13 +44,13 @@
 	</style>
 	<script type="text/javascript">
 	function submitQuery() {
-		send_cmd($('#query').val());
+		query($('#query').val(), drawResponse);
 	}
 
 	var ws, result_callback;
 
 	function reloadDatabases() {
-		result_callback = function(data) {
+		query("SHOW DATABASES", function(data) {
 			if (data.err) {
 				alert(data.err);
 				return;
@@ -54,23 +63,30 @@
 			}
 
 			$('#database').html(lst.join("\n"));
-		};
-
-		send_cmd("SHOW DATABASES")
+		});
 	}
 
 	function selectDatabase(val) {
 		$('#database').attr('disabled', true);
-		result_callback = function(data) {
+		query("USE " + val, function(data) {
 			if (data.err) {
 				alert(data.err);
 				return;
 			}
 
-			$('#database').attr('disabled', false);
-			$('#query').focus()
-		};
-		send_cmd("USE " + val);
+			query("SHOW TABLES", function(data) {
+				if (data.err) {
+					alert(data.err);
+					return;
+				}
+
+				drawTables(data.rows);
+
+				$('#info').html('');
+				$('#database').attr('disabled', false);
+				$('#query').focus();
+			});
+		});
 	}
 
 	$(function() {
@@ -91,9 +107,7 @@
 		}
 		ws.onmessage = function(ev) {
 			$('#execute-btn').attr('disabled', false);
-			if (!result_callback) result_callback = drawResponse;
 			result_callback(JSON.parse(ev.data));
-			result_callback = null;
 		}
 		ws.onclose = function() {
 			alert('Connection closed')
@@ -106,20 +120,28 @@
 			}
 		}).focus()
 
-		$res = $('#result');
-		$res.css({
-			width: $res.width() + 'px',
-			height: $res.height() + 'px',
-			top: $res.offset().top + 'px',
-			left: $res.offset().left + 'px'
-		})
+		absolutize($('#result'));
+		absolutize($('#tables'));
 	})
 	</script>
 </head>
 <body><table width="100%" height="100%">
 	<tr height="130">
 		<td width="200" rowspan="3" class="border" style="padding: 10px;">
-			<select id="database" onchange="selectDatabase(this.value)"></select>
+			<table width="100%" height="100%">
+				<tr height="30"><td>
+					<select id="database" onchange="selectDatabase(this.value)"></select>
+				</td></tr>
+				<tr>
+					<td><div id="tables"></div></td>
+				</tr>
+				<tr height="150"><td>
+					<b class="muted">Table info</b>
+					<div id="info">
+
+					</div>
+				</tr>
+			</table>
 		</td>
 		<td class="border">
 			<div><textarea id="query"></textarea></div>
@@ -132,7 +154,7 @@
 			</div>
 		</td>
 	</tr>
-	<tr height="50">
+	<tr height="20" style="height: 20px;">
 		<td class="border status">
 			<div>Query execution time: <span id="query-ms">0</span> ms; Affected rows: <span id="affected-rows">0</span></div>
 		</td>
