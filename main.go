@@ -61,7 +61,9 @@ func execute(db mysql.Conn, query string, ws *websocket.Conn) {
 	total_ns := time.Now().UnixNano() - before.UnixNano()
 
 	result["time_ns"] = total_ns
-	result["affected_rows"] = res.AffectedRows()
+	if err == nil {
+		result["affected_rows"] = res.AffectedRows()
+	}
 
 	serialized, err := json.MarshalIndent(result, "", " ")
 
@@ -96,6 +98,22 @@ func readInt(r io.Reader) int {
 	return result
 }
 
+func readQuery(ws *websocket.Conn) []byte {
+	queryLen := readInt(ws)
+	if queryLen > MAX_QUERY_SIZE {
+		fmt.Fprint(os.Stderr, "Too long query:", queryLen)
+		panic("Too long query")
+	}
+
+	queryBytes := make([]byte, queryLen)
+	_, err := io.ReadFull(ws, queryBytes)
+	if err != nil {
+		panic("Cannot read request")
+	}
+
+	return queryBytes
+}
+
 func mysqlHandler(ws *websocket.Conn) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -104,7 +122,7 @@ func mysqlHandler(ws *websocket.Conn) {
 		}
 	}()
 
-	db := mysql.New("tcp", "", "127.0.0.1:3306", "root", "root", "")
+	db := mysql.New("tcp", "", string(readQuery(ws)) + ":3306", "root", "root", "")
 	err := db.Connect()
 	if err != nil {
 		panic(err)
@@ -112,20 +130,7 @@ func mysqlHandler(ws *websocket.Conn) {
 	defer db.Close()
 
 	for {
-		queryLen := readInt(ws)
-		if queryLen > MAX_QUERY_SIZE {
-			fmt.Fprint(os.Stderr, "Too long query:", queryLen)
-			return
-		}
-
-		queryBytes := make([]byte, queryLen)
-		_, err = io.ReadFull(ws, queryBytes)
-		if err != nil {
-			panic("Cannot read request")
-		}
-
-		query := string(queryBytes)
-		execute(db, query, ws)
+		execute(db, string(readQuery(ws)), ws)
 	}
 }
 

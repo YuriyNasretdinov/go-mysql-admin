@@ -76,7 +76,19 @@
 	$(function() {
 		ws = new WebSocket('ws://' + window.location.host + '/mysql', "mysql");
 
-		ws.onopen = reloadDatabases;
+		ws.onopen = function() {
+			var db_host;
+			if (window.location.hash) {
+				db_host = window.location.hash.replace('#', '');
+			} else {
+				db_host = prompt('Host:', 'dbm1.d3');
+			}
+
+			document.title = db_host + ' - ' + document.title;
+			window.location.hash = db_host;
+			send_cmd(db_host);
+			reloadDatabases();
+		}
 		ws.onmessage = function(ev) {
 			$('#execute-btn').attr('disabled', false);
 			if (!result_callback) result_callback = drawResponse;
@@ -84,7 +96,7 @@
 			result_callback = null;
 		}
 		ws.onclose = function() {
-			console.log('Connection closed')
+			alert('Connection closed')
 		}
 
 		$('#query').keydown(function(ev) {
@@ -106,7 +118,7 @@
 </head>
 <body><table width="100%" height="100%">
 	<tr height="130">
-		<td width="200" rowspan="3" class="border">
+		<td width="200" rowspan="3" class="border" style="padding: 10px;">
 			<select id="database" onchange="selectDatabase(this.value)"></select>
 		</td>
 		<td class="border">
