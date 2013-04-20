@@ -3,39 +3,43 @@ function drawResponse(data) {
   $('#affected-rows').html(data['affected_rows'])
 
   if (data.err) {
-    $('#result').html('<b>Error:</b> ' + data.err);
+    $('#query-result').html('<b>Error:</b> ' + data.err);
     return;
   }
 
   if (!data.fields.length) {
-    $('#result').html('<i>Query executed successfully. Got empty resultset</i>');
+    $('#query-result').html('<i>Query executed successfully. Got empty resultset</i>');
     return;
   }
 
-  var response = [];
   var fields = data.fields;
-  response.push("<table class='table table-striped table-bordered table-condensed'><thead><tr>");
-  for (var i = 0; i < fields.length; i++) {
-    response.push("<th>" + fields[i] + "</th>");
-  }
-  response.push("</tr></thead><tbody>");
-
   var rows = data.rows;
-  for (var i = 0; i < rows.length; i++) {
-    response.push("<tr>")
-    var row = rows[i]
-    for (var j = 0; j < row.length; j++) {
-      if (row[j] == null) {
-        response.push("<td><i>NULL</i></td>");
-      } else {
-        response.push("<td>" + htmlspecialchars(row[j]) + "</td>");
-      }
-    }
-    response.push("</tr>")
-  }
 
-  response.push("</tbody></tr></table>")
-  $('#result').html(response.join("\n"));
+  try {
+    grid.destroy();
+  } catch (e) {
+  }
+  
+  grid = new GGGR();
+  grid.container = document.getElementById('query-result');
+
+  grid.fields = {};
+  for (var i = 0; i < fields.length; i++) grid.fields['_' + i] = fields[i];
+
+  grid.dataSource = {
+    type: 'local',
+    fetch: function(idx) {
+      var row = rows[idx];
+      var result = {};
+      for (var i = 0; i < row.length; i++) {
+        result['_' + i] = row[i] === null ? '<i>NULL</i>' : htmlspecialchars(row[i]);
+      }
+
+      return result;
+    },
+    count: function() { return rows.length; }
+  };
+  grid.setup();
 }
 
 function query(str, callback) {
@@ -50,40 +54,94 @@ function absolutize($el) {
   })
 }
 
-function drawTables(rows) {
-  var result = ['<table class="table table-condensed table-hover"><thead><tr><th>Tables</th></tr></thead><tbody>'];
-  for (var i = 0; i < rows.length; i++) {
-    var name = htmlspecialchars(rows[i][0]);
-    result.push('<tr class="table_name" data-name="' + name + '"><td><i class="icon-th"></i>' + name + '</td></tr>')
+function selectDatabase(val) {
+  $('#database').attr('disabled', true);
+  query("USE " + val, function(data) {
+    if (data.err) {
+      alert(data.err);
+      return;
+    }
+
+    query("SHOW TABLES", function(data) {
+      if (data.err) {
+        alert(data.err);
+        return;
+      }
+
+      global_tables = [];
+      for (var i = 0; i < data.rows.length; i++) global_tables[i] = data.rows[i][0];
+      drawTables(global_tables);
+
+      $('#info').html('');
+      $('#database').attr('disabled', false);
+      $('#search').val('').focus();
+    });
+  });
+}
+
+function reloadDatabases() {
+  query("SHOW DATABASES", function(data) {
+    if (data.err) {
+      alert(data.err);
+      return;
+    }
+
+    var lst = ['<option value="">Select database...</option>'];
+    for (var i = 0; i < data.rows.length; i++) {
+      var name = data.rows[i][0];
+      lst.push('<option value="' + htmlspecialchars(name) + '">' + htmlspecialchars(name) + '</option>');
+    }
+
+    $('#database').html(lst.join("\n"));
+  });
+}
+
+function filterTables() {
+  var q = $('#search').val();
+  var tables = []
+  if (q == '') {
+    tables = global_tables;
+  } else {
+    for (var i = 0; i < global_tables.length; i++) {
+      if (global_tables[i].indexOf(q) != -1) tables.push(global_tables[i]);
+    }
   }
-  result.push('</tbody></table>');
-  $('#tables').html(result.join("\n")).find('.table_name').each(function() {
-    $(this).bind('click', function() {
-      var name = $(this).data('name');
-      var className = 'success';
-      $('#tables').find('.' + className).removeClass(className);
-      $(this).addClass(className);
-      query("SHOW TABLE STATUS LIKE '" + name + "'", function(data) {
-        if (data.err) {
-          alert(data.err);
-          return;
-        }
+  drawTables(tables);
+}
 
-        var fields = data.fields;
-        var row = data.rows[0];
+function drawTables(tables) {
+  var result = ['<ul class="nav nav-list"><li class="nav-header">Tables</li>'];
+  for (var i = 0; i < tables.length; i++) {
+    var name = htmlspecialchars(tables[i]);
+    result.push('<li><a href="#" class="table_name" data-name="' + name + '"><i class="icon-th"></i>' + name + '</a></li>')
+  }
+  result.push('</ul>');
+  $('#tables').html(result.join("\n")).find('.table_name').bind('click', function() {
+    var name = $(this).data('name');
+    var className = 'active';
+    $('#tables').find('.' + className).removeClass(className);
+    $(this.parentNode).addClass(className);
+    query("SHOW TABLE STATUS LIKE '" + name + "'", function(data) {
+      if (data.err) {
+        alert(data.err);
+        return;
+      }
 
-        var rowAssoc = {};
-        for (var i = 0; i < fields.length; i++) rowAssoc[fields[i]] = row[i];
+      var fields = data.fields;
+      var row = data.rows[0];
 
-        $('#query').val('SELECT * FROM ' + name + ' LIMIT 1000').focus();
+      var rowAssoc = {};
+      for (var i = 0; i < fields.length; i++) rowAssoc[fields[i]] = row[i];
 
-        $('#info').html(
-          '<div><b>Engine:</b> ' + htmlspecialchars(rowAssoc['Engine']) + '</div>' +
-          '<div><b>Est. Rows:</b> ' + htmlspecialchars(rowAssoc['Rows']) + '</div>' +
-          '<div><b>Size:</b> ' + humanSize(parseInt(rowAssoc['Data_length']) + parseInt(rowAssoc['Index_length'])) + '</div>'
-        );
-      });
-    })
+      $('#query').val('SELECT * FROM ' + name + ' LIMIT 1000').focus();
+
+      $('#info').html(
+        '<div><b>Engine:</b> ' + htmlspecialchars(rowAssoc['Engine']) + '</div>' +
+        '<div><b>Est. Rows:</b> ' + htmlspecialchars(rowAssoc['Rows']) + '</div>' +
+        '<div><b>Size:</b> ' + humanSize(parseInt(rowAssoc['Data_length']) + parseInt(rowAssoc['Index_length'])) + '</div>'
+      );
+    });
+    return false;
   });
 }
 

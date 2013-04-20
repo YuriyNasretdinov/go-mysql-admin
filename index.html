@@ -1,13 +1,19 @@
 <html>
 <head>
 	<title>Go MySQL admin</title>
-	<link href="css/bootstrap.min.css" rel="stylesheet" media="screen">
+	<link href="css/bootstrap.css" rel="stylesheet" media="screen">
 	<script type="text/javascript" src="jquery.js"></script>
+	<script type="text/javascript" src="js/bootstrap.js"></script>
+	<script type="text/javascript" src="gggr.js"></script>
 	<script type="text/javascript" src="app.js"></script>
 	<style type="text/css">
+	body {
+		overflow: hidden;
+	}
+
 	#query {
 		width: 100%;
-		height: 100px;
+		height: 60px;
 	}
 
 	th, td {
@@ -19,7 +25,11 @@
 		border: 1px gray solid;
 	}
 
-	#result, #tables {
+	.border-bottom {
+		border-bottom: 1px gray solid;
+	}
+
+	#query-result, #tables {
 		height: 100%;
 		width: 100%;
 		overflow: auto;
@@ -27,10 +37,10 @@
 
 	.table_name {
 		white-space: nowrap;
-		cursor: default;
+		font-size: 0.8em;
 	}
 
-	#result td, #result th {
+	#query-result td, #query-result th {
 		font-size: 0.8em;
 	}
 
@@ -38,56 +48,79 @@
 		padding-left: 10px;
 	}
 
+	#search {
+		width: 100%;
+	}
+
 	.status {
 		background-color: #f5f5f5;
 	}
+
+	/* GGGR */
+
+	.GGGR
+	{
+		/* height: 500px; */
+		overflow-y: hidden;
+		overflow-x: auto;
+		z-index: 1;
+	}
+
+	.gggr_head
+	{
+		position: relative;
+	    top: 0;
+	    left: 0;
+	    z-index: 20;
+	}
+
+	.gggr_head_table
+	{
+	    border-bottom: 1px #aeaeae solid;
+
+		-moz-border-radius: 15px 15px 0px 0px;
+		-webkit-border-radius: 15px 15px 0px 0px;
+		border-radius: 15px 15px 0px 0px;
+		
+		background-color: #ececec;
+	}
+
+	.gggr_body
+	{
+		background-color: #fdfdfd;
+		height: 100%;
+		width: auto;
+		display: inline-block;
+		*display: inline;
+
+		cursor: default;
+	}
+
+	.gggr_th_header
+	{
+		border-bottom: 0px !important;
+
+		font-family: Verdana !important;
+		font-weight: bold;
+		font-size: 15px !important;
+		color: #595959;
+
+	}
+
+	.gggr_header
+	{
+		height: 20px;
+		overflow: hidden;
+		text-align: center;
+	}
+
 	</style>
 	<script type="text/javascript">
 	function submitQuery() {
 		query($('#query').val(), drawResponse);
 	}
 
-	var ws, result_callback;
-
-	function reloadDatabases() {
-		query("SHOW DATABASES", function(data) {
-			if (data.err) {
-				alert(data.err);
-				return;
-			}
-
-			var lst = ['<option value="">Select database...</option>'];
-			for (var i = 0; i < data.rows.length; i++) {
-				var name = data.rows[i][0];
-				lst.push('<option value="' + htmlspecialchars(name) + '">' + htmlspecialchars(name) + '</option>');
-			}
-
-			$('#database').html(lst.join("\n"));
-		});
-	}
-
-	function selectDatabase(val) {
-		$('#database').attr('disabled', true);
-		query("USE " + val, function(data) {
-			if (data.err) {
-				alert(data.err);
-				return;
-			}
-
-			query("SHOW TABLES", function(data) {
-				if (data.err) {
-					alert(data.err);
-					return;
-				}
-
-				drawTables(data.rows);
-
-				$('#info').html('');
-				$('#database').attr('disabled', false);
-				$('#query').focus();
-			});
-		});
-	}
+	var ws, result_callback, global_tables, grid;
 
 	$(function() {
 		ws = new WebSocket('ws://' + window.location.host + '/mysql', "mysql");
@@ -120,22 +153,26 @@
 			}
 		}).focus()
 
-		absolutize($('#result'));
+		$('#search').bind({keyup: filterTables, mouseup: filterTables});
+
 		absolutize($('#tables'));
 	})
 	</script>
 </head>
 <body><table width="100%" height="100%">
-	<tr height="130">
-		<td width="200" rowspan="3" class="border" style="padding: 10px;">
+	<tr>
+		<td width="200" style="padding: 0px;">
 			<table width="100%" height="100%">
-				<tr height="30"><td>
+				<tr height="50"><td style="padding: 10px 10px 0px 10px;" class="border">
 					<select id="database" onchange="selectDatabase(this.value)"></select>
 				</td></tr>
+				<tr height="20"><td class="border" style="border-bottom: 0px;">
+					<input type="text" id="search" placeholder="Filter" class="span2 search-query" />
+				</td></tr>
 				<tr>
-					<td><div id="tables"></div></td>
+					<td class="border" style="border-top: 0px;"><div id="tables"></div></td>
 				</tr>
-				<tr height="150"><td>
+				<tr height="100" class="border" style="border-bottom: 0px;"><td>
 					<b class="muted">Table info</b>
 					<div id="info">
 
@@ -143,20 +180,50 @@
 				</tr>
 			</table>
 		</td>
-		<td class="border">
-			<div><textarea id="query"></textarea></div>
-			<div><button id="execute-btn" class="btn btn-primary" onclick="submitQuery()"><b>Execute</b></div>			
-		</td>
-	</tr>
-	<tr>
-		<td class="border">
-			<div id="result">
-			</div>
-		</td>
-	</tr>
-	<tr height="20" style="height: 20px;">
-		<td class="border status">
-			<div>Query execution time: <span id="query-ms">0</span> ms; Affected rows: <span id="affected-rows">0</span></div>
+		<td style="padding: 0px;">
+			<table width="100%" height="100%" id="query-view">
+				<tr height="20">
+					<td class="border-bottom">
+						<ul class="nav nav-pills" style="margin: 0px;">
+							<li><a href="#">Content</a></li>
+							<li class="active"><a href="#">Query</a></li>
+						</ul>
+					</td>
+				</tr>
+				<tr>
+					<td style="padding: 0px;">
+						<table width="100%" height="100%" id="content-view" style="display: none;">
+							<tr height="30"><td>
+								<b>Filter:</b>
+							</td></tr>
+							<tr><td>
+								<div id="content-result">
+								</div>
+							</td></tr>
+							<tr height="40"><td class="border status" style="border-bottom: 0px;">
+								<div>Some status information</div>
+							</td></tr>
+						</table>
+						<table width="100%" height="100%" id="query-view">
+							<tr height="95"><td>
+								<div><textarea style="margin-bottom: 5px;" id="query"></textarea></div>
+								<div>
+									<button id="execute-btn" class="btn btn-mini btn-primary pull-right" onclick="submitQuery()">
+										<b>Execute</b>
+									</button>
+								</div>
+							</td></tr>
+							<tr><td class="border-bottom">
+								<div id="query-result">
+								</div>
+							</td></tr>
+							<tr height="40"><td class="status" style="border-bottom: 0px;">
+								<div>Query execution time: <span id="query-ms">0</span> ms; Affected rows: <span id="affected-rows">0</span></div>
+							</td></tr>
+						</table>
+					</td>
+				</tr>
+			</table>
 		</td>
 	</tr>
 </table></body>
