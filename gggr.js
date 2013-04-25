@@ -1,7 +1,7 @@
 window.GGGR = function()
 {
-	var VIRTUAL_ROW_HEIGHT = 30;
-	var REAL_ROW_HEIGHT = 30;
+	var VIRTUAL_ROW_HEIGHT = 40;
+	var REAL_ROW_HEIGHT = 40;
 	
 	var T = this;
 	
@@ -261,25 +261,24 @@ window.GGGR = function()
 	{
 		_field_offsets = { };
 		
-		var prev_offset = 1;
+		var prev_offset = 0;
 
 		var i = 0;
-
 		for(var k in _fields)
 		{
 			i++;
 
-			var wd = parseInt(_widths[k] || 100) + 1; // account for 1px border
+			var wd = parseInt(_colWidth(k)) + 16 + 1; // account for 1px border
 			
 			prev_offset += wd;
 			
-			_field_offsets[k] = i == 1 ? -1000 : prev_offset;
+			_field_offsets[k] = prev_offset;
 		}
 	}
 	
 	function _colWidth(k)
 	{
-		return _widths[k] ? _widths[k] - 6 : 94;
+		return _widths[k] ? _widths[k] : 92;
 	}
 	
 	var _last_render_widths = null;
@@ -349,7 +348,7 @@ window.GGGR = function()
 
 			for(var k in _fields)
 			{
-				code.push('<th width="'+_colWidth(k)+'" class="gggr_cell gggr_th_header"><div style="width: '+_colWidth(k)+'px;" class="gggr_header"><nobr>' + _fields[k] + '</nobr></div></th>');
+				code.push('<th width="'+_colWidth(k)+'" class="gggr_th_header"><div style="width: '+_colWidth(k)+'px;" class="gggr_header"><nobr>' + _fields[k] + '</nobr></div></th>');
 			}
 
 			code.push('</tr></thead></table></div><div id="'+_id+'_body" class="gggr_body">');
@@ -430,14 +429,14 @@ window.GGGR = function()
 					//colWd += _colWidth(k) + 3;
 				}
 				
-				code.push('<td colspan="'+colspanCnt+'" width="'+(_field_offsets[last_k]-8 + 1 /*virtual border*/)+'" align="center" class="gggr_cell">&nbsp;</td>');
+				code.push('<td colspan="'+colspanCnt+'" width="'+(_field_offsets[last_k]-8)+'" align="center" class="gggr_cell">&nbsp;</td>');
 			}else
 			{
 				for(var k in _fields)
 				{
 					code.push('\
-					<td width="'+(_colWidth(k)+1)+'" class="gggr_cell" id="gggr_'+i+'"'+(customColor ? 'style="border-bottom: 1px #f9f9f9 solid;"' : '')+'>\
-						<div style="width: '+(_colWidth(k)+1)+'px; overflow: hidden;">'+(res[k]===null ? '&nbsp;' : res[k])+'</div>\
+					<td width="'+_colWidth(k)+'" class="gggr_cell" id="gggr_'+i+'"'+(customColor ? 'style="border-bottom: 1px #f9f9f9 solid;"' : '')+'>\
+						<div style="width: '+_colWidth(k)+'px; overflow: hidden;">'+(res[k]===null ? '&nbsp;' : res[k])+'</div>\
 					</td>');
 				}
 			}
