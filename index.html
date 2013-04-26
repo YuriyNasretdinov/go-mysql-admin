@@ -37,6 +37,7 @@
 
 	.table_name {
 		white-space: nowrap;
+		cursor: default;
 		font-size: 0.8em;
 	}
 
@@ -139,7 +140,12 @@
 		}
 		ws.onmessage = function(ev) {
 			$('#execute-btn').attr('disabled', false);
-			result_callback(JSON.parse(ev.data));
+			try {
+				var res = JSON.parse(ev.data);
+				result_callback(res);
+			} catch (e) {
+				result_callback({err: ev.data});
+			}
 		}
 		ws.onclose = function() {
 			alert('Connection closed')
